@@ -1,0 +1,17 @@
+{
+  "buildCommand": "pnpm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "functions": {
+    "app/api/**/*.ts": {
+      "maxDuration": 300,
+      "memory": 3008
+    }
+  },
+  "env": {
+    "OPENROUTER_API_KEY": "@openrouter_api_key",
+    "PIXABAY_API_KEY": "@pixabay_api_key",
+    "ZEROG_PRIVATE_KEY": "@zerog_private_key",
+    "NEXT_PUBLIC_SITE_URL": "@site_url"
+  }
+}

@@ -1,15 +1,34 @@
-# AI PPT Generator
+# AI PPT Generator with 0G Storage
 
-Transform your PowerPoint presentations with AI-powered content generation and automatic image sourcing.
+Transform your PowerPoint presentations with AI-powered content generation, automatic image sourcing, and decentralized storage on 0G Network.
 
-## Features
+## 🚀 Quick Deploy
+
+**Choose your deployment method:**
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template)
+
+- **Railway** (Recommended) - [Quick Start Guide](./QUICKSTART.md)
+- **Vercel** - See [Deployment Guide](./DEPLOYMENT.md)
+- **Docker** - `docker-compose up -d`
+- **Self-hosted** - See [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+## ✨ Features
 
 - **AI Content Generation**: Powered by Gemini 2.0 Flash via OpenRouter
 - **Smart Image Sourcing**: Automatically finds relevant images from Pixabay
+- **0G Storage Integration**: Decentralized file storage on 0G Network
 - **Template Preservation**: Maintains your template's design while replacing content
 - **Easy to Use**: Simple 3-step process - upload, describe, generate
+- **History Tracking**: Track all your generated presentations
 
-## Setup
+## 📋 Prerequisites
+
+1. **OpenRouter API Key** - Get from https://openrouter.ai/keys
+2. **Pixabay API Key** - Get from https://pixabay.com/api/docs/
+3. **0G Network Wallet** - Create wallet and get private key (optional for storage)
+
+## 🛠️ Setup
 
 ### 1. Install Dependencies
 
