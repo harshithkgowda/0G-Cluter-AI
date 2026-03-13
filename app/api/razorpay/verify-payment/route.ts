@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import crypto from "crypto"
 
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET
+
+// Helper to create HMAC-SHA256 using Web Crypto API
+async function createHmacSha256(key: string, message: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const keyData = encoder.encode(key)
+  const messageData = encoder.encode(message)
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    keyData,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  )
+  
+  const signature = await crypto.subtle.sign("HMAC", cryptoKey, messageData)
+  const hashArray = Array.from(new Uint8Array(signature))
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("")
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,12 +39,9 @@ export async function POST(request: NextRequest) {
       durationDays,
     } = await request.json()
 
-    // Verify signature
+    // Verify signature using Web Crypto API
     const body = razorpay_order_id + "|" + razorpay_payment_id
-    const expectedSignature = crypto
-      .createHmac("sha256", RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest("hex")
+    const expectedSignature = await createHmacSha256(RAZORPAY_KEY_SECRET, body)
 
     const isAuthentic = expectedSignature === razorpay_signature
 
