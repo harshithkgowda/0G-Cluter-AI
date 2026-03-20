@@ -9,7 +9,7 @@ import {
   Edit2,
   RefreshCw,
   Copy,
-  Delete2,
+  Trash2,
   Save,
   X,
   Wand2,
@@ -152,7 +152,7 @@ export function SectionEditor({
                 className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                 title="Delete section"
               >
-                <Delete2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </>
           )}
