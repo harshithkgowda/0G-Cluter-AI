@@ -1,62 +1,55 @@
 import { NextRequest, NextResponse } from "next/server"
-import { generateContentWithAI } from "@/lib/ai-content-generator"
 import { DocumentPage, DocumentSection } from "@/types/document"
-
-interface ProcessDocumentRequest {
-  fileName: string
-  fileSize: number
-  pageCount: number
-  prompt: string
-  slides: Array<{
-    pageNumber: number
-    title: string
-    content: string[]
-  }>
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const body: ProcessDocumentRequest = await request.json()
+    const formData = await request.formData()
+    const file = formData.get("file") as File
 
-    console.log("[v0] Processing document:", body.fileName, "Pages:", body.pageCount)
+    if (!file) {
+      return NextResponse.json(
+        { error: "No file provided" },
+        { status: 400 }
+      )
+    }
 
+    console.log("[v0] Processing document:", file.name, "Size:", file.size)
+
+    // For now, create a mock document structure
+    // In production, you would parse the file (PPTX, PDF, DOCX)
+    const fileName = file.name
+    const fileType = fileName.split(".").pop()?.toLowerCase()
+
+    // Create mock pages based on file type
     const pages: DocumentPage[] = []
 
-    // Process each page
-    for (const slide of body.slides) {
+    // Create 3 sample pages for demonstration
+    for (let i = 1; i <= 3; i++) {
       const sections: DocumentSection[] = []
 
-      // Add title
+      // Add title section
       sections.push({
-        id: `section-${slide.pageNumber}-title`,
+        id: `section-${i}-title`,
         type: "title",
-        content: slide.title,
+        content: `Page ${i} Title`,
       })
 
       // Add content sections
-      for (const content of slide.content) {
-        const sectionId = `section-${slide.pageNumber}-${sections.length}`
-
-        // Mark as generating
-        const section: DocumentSection = {
-          id: sectionId,
+      for (let j = 1; j <= 2; j++) {
+        sections.push({
+          id: `section-${i}-${j}`,
           type: "paragraph",
-          content: "",
-          isGenerating: true,
-        }
-
-        sections.push(section)
+          content: `This is content paragraph ${j} on page ${i}. Click to edit or use AI to regenerate.`,
+        })
       }
 
-      const page: DocumentPage = {
-        id: `page-${slide.pageNumber}`,
-        pageNumber: slide.pageNumber,
-        title: slide.title,
+      pages.push({
+        id: `page-${i}`,
+        pageNumber: i,
+        title: `Page ${i}`,
         sections,
         generatedAt: new Date(),
-      }
-
-      pages.push(page)
+      })
     }
 
     return NextResponse.json({
