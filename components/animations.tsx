@@ -10,10 +10,9 @@ interface FadeInProps {
 export function FadeIn({ children, delay = 0, duration = 500, className }: FadeInProps) {
   return (
     <div
-      className={cn("animate-in fade-in", className)}
+      className={cn("opacity-0 animate-pulse", className)}
       style={{
-        animationDelay: `${delay}ms`,
-        animationDuration: `${duration}ms`,
+        animation: `fadeIn ${duration}ms ease-out ${delay}ms forwards`,
       }}
     >
       {children}
@@ -30,20 +29,28 @@ interface SlideInProps {
 }
 
 export function SlideIn({ children, direction = "up", delay = 0, duration = 500, className }: SlideInProps) {
-  const directionClass = {
-    left: "slide-in-from-left",
-    right: "slide-in-from-right",
-    up: "slide-in-from-bottom",
-    down: "slide-in-from-top",
-  }[direction]
+  const getTransform = () => {
+    switch (direction) {
+      case "left":
+        return "translateX(-20px)"
+      case "right":
+        return "translateX(20px)"
+      case "up":
+        return "translateY(20px)"
+      case "down":
+        return "translateY(-20px)"
+      default:
+        return "translateY(20px)"
+    }
+  }
 
   return (
     <div
-      className={cn("animate-in", directionClass, className)}
+      className={cn("opacity-0", className)}
       style={{
-        animationDelay: `${delay}ms`,
-        animationDuration: `${duration}ms`,
-      }}
+        animation: `slideIn ${duration}ms ease-out ${delay}ms forwards`,
+        "--slide-start": getTransform(),
+      } as React.CSSProperties & { "--slide-start": string }}
     >
       {children}
     </div>
