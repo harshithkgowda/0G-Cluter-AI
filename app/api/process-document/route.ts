@@ -1,74 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { DocumentPage, DocumentSection } from "@/types/document"
 
-// Simple PPTX parser - extract text and basic structure
-async function parsePPTX(buffer: Buffer): Promise<DocumentPage[]> {
-  try {
-    const JSZip = require("jszip")
-    const zip = new JSZip()
-    await zip.loadAsync(buffer)
-
-    // Extract presentation XML
-    const slides: DocumentPage[] = []
-    let slideCount = 0
-
-    // Get all slide files
-    const slideFiles = Object.keys(zip.files)
-      .filter(name => name.includes("ppt/slides/slide") && name.endsWith(".xml"))
-      .sort()
-
-    for (const slideFile of slideFiles) {
-      slideCount++
-      const slideXml = await zip.file(slideFile).async("string")
-
-      // Extract text content from slide
-      const textMatches = slideXml.match(/<a:t>([^<]*)<\/a:t>/g) || []
-      const texts = textMatches.map(m => m.replace(/<[^>]*>/g, "")).filter(t => t.trim())
-
-      const sections: DocumentSection[] = []
-
-      if (texts.length > 0) {
-        // First text is usually title
-        sections.push({
-          id: `section-${slideCount}-title`,
-          type: "title",
-          content: texts[0] || `Slide ${slideCount}`,
-        })
-
-        // Rest are content
-        for (let i = 1; i < texts.length; i++) {
-          if (texts[i].trim()) {
-            sections.push({
-              id: `section-${slideCount}-${i}`,
-              type: "paragraph",
-              content: texts[i],
-            })
-          }
-        }
-      } else {
-        sections.push({
-          id: `section-${slideCount}-title`,
-          type: "title",
-          content: `Slide ${slideCount}`,
-        })
-      }
-
-      slides.push({
-        id: `page-${slideCount}`,
-        pageNumber: slideCount,
-        title: texts[0] || `Slide ${slideCount}`,
-        sections,
-        generatedAt: new Date(),
-      })
-    }
-
-    return slides.length > 0 ? slides : createMockPages()
-  } catch (error) {
-    console.error("[v0] Error parsing PPTX:", error)
-    return createMockPages()
-  }
-}
-
 function createMockPages(): DocumentPage[] {
   const pages: DocumentPage[] = []
   for (let i = 1; i <= 3; i++) {
@@ -81,7 +13,7 @@ function createMockPages(): DocumentPage[] {
     sections.push({
       id: `section-${i}-content`,
       type: "paragraph",
-      content: `This is content on slide ${i}. Click to edit.`,
+      content: `This is content on slide ${i}. Click to edit or regenerate with AI.`,
     })
     pages.push({
       id: `page-${i}`,
@@ -92,6 +24,25 @@ function createMockPages(): DocumentPage[] {
     })
   }
   return pages
+}
+
+// Extract text from PPTX buffer using regex (PPTX is ZIP with XML)
+function extractPPTXText(buffer: Buffer): string[] {
+  try {
+    const text = buffer.toString("utf8", 0, Math.min(buffer.length, 500000))
+    
+    // Extract text between XML tags (common in PPTX slides)
+    const textMatches = text.match(/<a:t>([^<]*)<\/a:t>/g) || []
+    const extracted = textMatches
+      .map(m => m.replace(/<[^>]*>/g, ""))
+      .filter(t => t.trim() && t.length > 0)
+    
+    console.log("[v0] Extracted", extracted.length, "text items from PPTX")
+    return extracted
+  } catch (error) {
+    console.error("[v0] Error extracting PPTX text:", error)
+    return []
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -110,12 +61,59 @@ export async function POST(request: NextRequest) {
 
     let pages: DocumentPage[] = []
 
-    // Handle different file types
     if (fileType === "pptx") {
-      const buffer = await file.arrayBuffer()
-      pages = await parsePPTX(Buffer.from(buffer))
+      try {
+        const buffer = await file.arrayBuffer()
+        const textContent = extractPPTXText(Buffer.from(buffer))
+
+        if (textContent.length > 0) {
+          // Group extracted text into slides (approximately 5-10 items per slide)
+          const itemsPerSlide = Math.max(2, Math.ceil(textContent.length / 4))
+          let slideIndex = 1
+
+          for (let i = 0; i < textContent.length; i += itemsPerSlide) {
+            const slideTexts = textContent.slice(i, i + itemsPerSlide)
+            const sections: DocumentSection[] = []
+
+            // First item is title
+            sections.push({
+              id: `section-${slideIndex}-title`,
+              type: "title",
+              content: slideTexts[0] || `Slide ${slideIndex}`,
+            })
+
+            // Rest are content
+            for (let j = 1; j < slideTexts.length; j++) {
+              if (slideTexts[j].trim()) {
+                sections.push({
+                  id: `section-${slideIndex}-${j}`,
+                  type: "paragraph",
+                  content: slideTexts[j],
+                })
+              }
+            }
+
+            pages.push({
+              id: `page-${slideIndex}`,
+              pageNumber: slideIndex,
+              title: slideTexts[0] || `Slide ${slideIndex}`,
+              sections,
+              generatedAt: new Date(),
+            })
+
+            slideIndex++
+          }
+        }
+
+        // Fallback to mock pages if extraction failed
+        if (pages.length === 0) {
+          pages = createMockPages()
+        }
+      } catch (error) {
+        console.error("[v0] Error parsing PPTX:", error)
+        pages = createMockPages()
+      }
     } else if (fileType === "pdf" || fileType === "docx") {
-      // For PDF and DOCX, create mock pages for now
       pages = createMockPages()
     } else {
       return NextResponse.json(
