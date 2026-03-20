@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useRef } from "react"
 import { DocumentEditor } from "@/components/document-editor"
 import { Document } from "@/types/document"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 export default function Home() {
   const [document, setDocument] = useState<Document | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { credits, isPremium, subscriptionEnd, isLoaded: creditsLoaded, useCredits: consumeCredits } = useCredits()
   const [isCreditsPanelOpen, setIsCreditsPanelOpen] = useState(false)
@@ -206,26 +207,27 @@ export default function Home() {
         </div>
 
         <div className="max-w-2xl mx-auto mb-16">
-          <Card className="glass p-8 border-2 border-dashed border-emerald-500/50 hover:border-emerald-500 transition-colors">
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                onChange={handleFileUpload}
-                disabled={isUploading}
-                className="hidden"
-                accept=".pptx,.pdf,.docx"
-              />
-              <div className="text-center py-8">
-                <Upload className="w-12 h-12 mx-auto mb-4 text-emerald-500 opacity-80" />
-                <p className="text-lg font-semibold mb-2">Drop your document here</p>
-                <p className="text-muted-foreground mb-4">
-                  {isUploading ? "Uploading..." : "PowerPoint, PDF, or Word documents"}
-                </p>
-                <Button disabled={isUploading} variant="default">
-                  {isUploading ? "Uploading..." : "Choose File"}
-                </Button>
-              </div>
-            </label>
+          <Card className="glass p-8 border-2 border-dashed border-emerald-500/50 hover:border-emerald-500 transition-colors cursor-pointer hover:bg-emerald-500/5"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileUpload}
+              disabled={isUploading}
+              className="hidden"
+              accept=".pptx,.pdf,.docx"
+            />
+            <div className="text-center py-8">
+              <Upload className="w-12 h-12 mx-auto mb-4 text-emerald-500 opacity-80" />
+              <p className="text-lg font-semibold mb-2">Drop your document here</p>
+              <p className="text-muted-foreground mb-4">
+                {isUploading ? "Uploading..." : "PowerPoint, PDF, or Word documents"}
+              </p>
+              <Button disabled={isUploading} variant="default">
+                {isUploading ? "Uploading..." : "Choose File"}
+              </Button>
+            </div>
           </Card>
         </div>
 
