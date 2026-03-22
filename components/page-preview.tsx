@@ -4,8 +4,7 @@ import { DocumentPage } from "@/types/document"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { SectionEditor } from "./section-editor"
 import { Button } from "@/components/ui/button"
-import { Plus, Download } from "lucide-react"
-import { FadeIn, SlideIn } from "./animations"
+import { Plus, Download, Layers } from "lucide-react"
 
 interface PagePreviewProps {
   page: DocumentPage
@@ -14,121 +13,123 @@ interface PagePreviewProps {
   onDownload: () => void
 }
 
-export function PagePreview({
-  page,
-  onUpdatePage,
-  onAddSection,
-  onDownload,
-}: PagePreviewProps) {
-  const handleUpdateSection = (sectionIndex: number, updatedSection: any) => {
-    const updatedSections = [...page.sections]
-    updatedSections[sectionIndex] = updatedSection
-    onUpdatePage({
-      ...page,
-      sections: updatedSections,
-    })
+export function PagePreview({ page, onUpdatePage, onAddSection, onDownload }: PagePreviewProps) {
+  const handleUpdateSection = (idx: number, updated: any) => {
+    const sections = [...page.sections]
+    sections[idx] = updated
+    onUpdatePage({ ...page, sections })
   }
 
-  const handleDeleteSection = (sectionIndex: number) => {
-    const updatedSections = page.sections.filter((_, i) => i !== sectionIndex)
-    onUpdatePage({
-      ...page,
-      sections: updatedSections,
-    })
+  const handleDeleteSection = (idx: number) => {
+    onUpdatePage({ ...page, sections: page.sections.filter((_, i) => i !== idx) })
   }
+
+  // Determine slide layout
+  const titleSection = page.sections.find(s => s.type === "title")
+  const bodySection = page.sections.filter(s => s.type !== "title")
 
   return (
-    <div className="flex-1 bg-background flex flex-col">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-4 flex items-center justify-between bg-background/50 backdrop-blur-sm sticky top-0 z-10">
-        <SlideIn direction="left">
-          <div>
-            <h1 className="text-2xl font-bold gradient-text">{page.title}</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Page {page.pageNumber}</p>
-          </div>
-        </SlideIn>
-        <SlideIn direction="right" delay={100}>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onDownload}
-              className="gap-2 hover-lift"
-            >
-              <Download className="w-4 h-4" />
-              Download
-            </Button>
-            <Button
-              size="sm"
-              onClick={onAddSection}
-              className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-white hover-lift"
-            >
-              <Plus className="w-4 h-4" />
-              Add Section
-            </Button>
-          </div>
-        </SlideIn>
+    <div className="flex-1 flex flex-col bg-background min-w-0 overflow-hidden">
+      {/* Toolbar */}
+      <div className="h-12 border-b border-border/60 px-5 flex items-center justify-between bg-card/40 backdrop-blur-sm shrink-0">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Layers className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="font-medium text-foreground">{page.title || `Slide ${page.pageNumber}`}</span>
+          <span className="text-border">·</span>
+          <span>Slide {page.pageNumber}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={onDownload} className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground">
+            <Download className="w-3.5 h-3.5" />
+            Export
+          </Button>
+          <Button size="sm" onClick={onAddSection} className="h-7 text-xs gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white">
+            <Plus className="w-3.5 h-3.5" />
+            Add Block
+          </Button>
+        </div>
       </div>
 
-      {/* Slide Preview Container */}
       <ScrollArea className="flex-1">
-        <div className="px-6 py-8">
-          {/* Template Preview */}
-          <div className="max-w-5xl mx-auto mb-8">
-            <div className="bg-card border border-border rounded-lg overflow-hidden shadow-lg glass p-8 space-y-6 min-h-96">
-              {/* Slide Content */}
-              {page.sections.length === 0 ? (
-                <FadeIn>
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground">No content on this slide</p>
+        <div className="px-8 py-8 space-y-8">
+
+          {/* === 16:9 SLIDE CANVAS === */}
+          <div className="max-w-4xl mx-auto">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 font-medium">Slide Preview</p>
+            {/* 16:9 aspect ratio wrapper */}
+            <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+              <div className="absolute inset-0 rounded-xl overflow-hidden border border-border/60 bg-[#0f1117] shadow-2xl shadow-black/40">
+                {/* Subtle grid background */}
+                <div className="absolute inset-0 opacity-[0.03]"
+                  style={{
+                    backgroundImage: "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)",
+                    backgroundSize: "40px 40px"
+                  }}
+                />
+
+                {/* Slide content — strictly clipped inside canvas */}
+                <div className="absolute inset-0 flex flex-col justify-center px-[8%] py-[7%] gap-[3%] overflow-hidden">
+                  {/* Title */}
+                  {titleSection ? (
+                    <h2 className="gradient-text font-bold leading-tight shrink-0"
+                      style={{ fontSize: "clamp(14px, 3.5vw, 36px)", maxWidth: "90%" }}>
+                      {titleSection.content || "Untitled Slide"}
+                    </h2>
+                  ) : null}
+
+                  {/* Body content */}
+                  <div className="flex-1 overflow-hidden space-y-[2%]">
+                    {bodySection.map((section) => (
+                      <div key={section.id} className="overflow-hidden">
+                        {section.type === "heading" ? (
+                          <h3 className="text-foreground font-semibold leading-tight"
+                            style={{ fontSize: "clamp(11px, 2vw, 22px)" }}>
+                            {section.content}
+                          </h3>
+                        ) : (
+                          <p className="text-foreground/70 leading-snug"
+                            style={{ fontSize: "clamp(9px, 1.4vw, 16px)" }}>
+                            {section.content}
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                </FadeIn>
-              ) : (
-                page.sections.map((section, index) => (
-                  <SlideIn key={section.id} direction="up" delay={index * 50}>
-                    <div className="space-y-2">
-                      {section.type === "title" ? (
-                        <h2 className="text-3xl font-bold gradient-text leading-tight">
-                          {section.content}
-                        </h2>
-                      ) : section.type === "heading" ? (
-                        <h3 className="text-2xl font-semibold text-foreground">
-                          {section.content}
-                        </h3>
-                      ) : (
-                        <p className="text-base text-foreground/80 leading-relaxed whitespace-pre-wrap">
-                          {section.content}
-                        </p>
-                      )}
-                    </div>
-                  </SlideIn>
-                ))
-              )}
+                </div>
+
+                {/* Slide number badge */}
+                <div className="absolute bottom-3 right-4 text-[10px] text-white/30 font-mono">
+                  {page.pageNumber}
+                </div>
+
+                {/* Emerald accent line at bottom */}
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500/60 via-teal-400/40 to-transparent" />
+              </div>
             </div>
           </div>
 
-          {/* Edit Section */}
-          <div className="max-w-5xl mx-auto space-y-4 pb-8">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Edit Content</h3>
-            {page.sections.length === 0 ? (
-              <FadeIn>
-                <div className="text-center py-12 text-muted-foreground">
-                  <p>No sections to edit. Add one to get started.</p>
+          {/* === EDIT PANELS === */}
+          <div className="max-w-4xl mx-auto">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3 font-medium">Edit Content</p>
+            <div className="space-y-3">
+              {page.sections.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground text-sm border border-dashed border-border/40 rounded-xl">
+                  No content blocks yet. Click "Add Block" to start.
                 </div>
-              </FadeIn>
-            ) : (
-              page.sections.map((section, index) => (
-                <SlideIn key={`edit-${section.id}`} direction="up" delay={index * 50}>
+              ) : (
+                page.sections.map((section, index) => (
                   <SectionEditor
+                    key={section.id}
                     section={section}
                     onUpdate={(updated) => handleUpdateSection(index, updated)}
                     onDelete={() => handleDeleteSection(index)}
                     pageContext={page.title}
                   />
-                </SlideIn>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
+
         </div>
       </ScrollArea>
     </div>
