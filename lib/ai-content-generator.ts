@@ -38,23 +38,24 @@ export async function generateContentWithAI(prompt: string, slideCount?: number)
 
   const userPrompt = `Create a professional presentation about: ${prompt}
 
-Generate ${slideCountText} with:
-- Compelling, action-oriented titles that grab attention (max 8 words)
-- 5-7 detailed bullet points per slide with clear value propositions
-- Each bullet point should be 15-25 words with specific, actionable information
-- Include statistics, percentages, or numbers where relevant
-- Professional tone with engaging language
+Generate ${slideCountText} with these STRICT requirements:
+- TITLES: Maximum 6-8 words, action-oriented and compelling
+- BULLET POINTS: Exactly 4-6 bullets per slide (not more!)
+- BULLET LENGTH: Each bullet must be 10-18 words maximum (short and impactful)
+- Use statistics, percentages, or numbers where relevant
+- Professional, concise language
 - Logical flow from introduction to conclusion
-- For imageQuery: use SHORT keywords (max 30 chars) like "business meeting" or "technology"
+- imageQuery: 1-2 simple words only (e.g., "teamwork", "innovation", "charts")
 
 Include these slide types:
-1. Title slide with overview
-2. Problem/Challenge slide
-3. Solution/Approach slides (2-3)
-4. Benefits/Results slide
-5. Conclusion/Call-to-action slide
+1. Title slide - compelling hook and overview
+2. Problem/Challenge - what issue are we solving?
+3. Solution slides (2-3) - how do we solve it?
+4. Benefits/Results - what outcomes can be expected?
+5. Conclusion - key takeaways and call-to-action
 
-Make it visually appealing and impactful. Return as JSON only.`
+CRITICAL: Keep content concise to fit on slides. Long bullets will be truncated.
+Return as valid JSON only.`
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -64,29 +65,36 @@ Make it visually appealing and impactful. Return as JSON only.`
       messages: [
         {
           role: "system",
-          content: `You are an expert presentation designer and content strategist. Create compelling, professional presentation content that:
+          content: `You are an expert presentation designer. Create CONCISE, professional presentation content optimized for visual slides.
 
-1. Uses powerful, action-oriented titles (max 8 words) that capture attention
-2. Creates 5-7 detailed bullet points per slide, each 15-25 words with specific information
-3. Includes numbers, statistics, percentages where relevant (e.g., "Increase productivity by 40%")
-4. Maintains a professional yet engaging tone throughout
-5. Structures content logically with smooth transitions between slides
-6. Uses active voice, strong verbs, and specific examples
-7. Each bullet point should be a complete thought with actionable insight
+STRICT FORMATTING RULES:
+1. TITLES: Maximum 6-8 words, action-oriented (e.g., "Transform Your Business Today")
+2. BULLETS: Exactly 4-6 bullet points per slide - NO MORE
+3. BULLET LENGTH: Each bullet MUST be 10-18 words maximum - keep them punchy and scannable
+4. Include numbers/statistics when relevant (e.g., "Boost efficiency by 35%")
+5. Use active voice and strong verbs
+6. imageQuery: Single word or two-word phrase only (e.g., "innovation", "data analytics")
 
-IMPORTANT: Return ONLY valid JSON (no markdown, no code blocks, no trailing commas) with this exact structure:
+SLIDE STRUCTURE:
+- Slide 1: Title slide with main hook
+- Slides 2-3: Problem/opportunity
+- Slides 4-5: Solution/approach  
+- Slide 6: Benefits/results
+- Final slide: Key takeaways and call-to-action
+
+IMPORTANT: Content MUST fit on slides. Bullets over 18 words will be truncated!
+
+Return ONLY valid JSON (no markdown, no code blocks):
 {
   "slides": [
     {
       "slideNumber": 1,
-      "title": "Short Powerful Title",
-      "content": ["Detailed bullet point 1 with specific information and value", "Detailed bullet point 2", "More points..."],
-      "imageQuery": "two word keyword"
+      "title": "Short Title Here",
+      "content": ["Short bullet 1", "Short bullet 2", "Short bullet 3", "Short bullet 4"],
+      "imageQuery": "keyword"
     }
   ]
-}
-
-For imageQuery, use VERY SHORT simple keywords (max 25 characters) like "teamwork" or "technology" or "charts" - just 1-2 words.`,
+}`,
         },
         {
           role: "user",
