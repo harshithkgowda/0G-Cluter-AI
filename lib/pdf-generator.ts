@@ -25,6 +25,12 @@ const COLUMN_GAP = 18
 const LINE_HEIGHT = 12
 const PARAGRAPH_SPACING = 6
 
+// Header area constraints to prevent overlap
+const TITLE_MAX_WIDTH = PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT - 40 // Extra padding for safety
+const HEADER_LINE_HEIGHT = 18
+const AUTHOR_LINE_HEIGHT = 16
+const AFFILIATION_LINE_HEIGHT = 14
+
 export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create()
 
@@ -59,9 +65,9 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
     }
   }
 
-  // Helper function to wrap text
+  // Improved text wrapping with word boundary respect
   const wrapText = (text: string, font: PDFFont, fontSize: number, maxWidth: number): string[] => {
-    const words = text.split(/\s+/)
+    const words = text.split(/\s+/).filter(w => w.length > 0)
     const lines: string[] = []
     let currentLine = ""
 
@@ -72,8 +78,29 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
       if (testWidth <= maxWidth) {
         currentLine = testLine
       } else {
-        if (currentLine) lines.push(currentLine)
-        currentLine = word
+        if (currentLine) {
+          lines.push(currentLine)
+        }
+        // Handle very long words that exceed maxWidth
+        if (font.widthOfTextAtSize(word, fontSize) > maxWidth) {
+          // Break the word into smaller chunks
+          let remaining = word
+          while (remaining.length > 0) {
+            let chunkEnd = remaining.length
+            while (chunkEnd > 1 && font.widthOfTextAtSize(remaining.substring(0, chunkEnd), fontSize) > maxWidth) {
+              chunkEnd--
+            }
+            if (lines.length > 0 || currentLine) {
+              lines.push(remaining.substring(0, chunkEnd))
+            } else {
+              lines.push(remaining.substring(0, chunkEnd))
+            }
+            remaining = remaining.substring(chunkEnd)
+          }
+          currentLine = ""
+        } else {
+          currentLine = word
+        }
       }
     }
     if (currentLine) lines.push(currentLine)
@@ -81,56 +108,63 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
     return lines
   }
 
-  // Draw title (centered, full width, larger font)
-  const titleLines = wrapText(content.title.toUpperCase(), timesBold, 14, PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT)
-  for (const line of titleLines) {
-    const titleWidth = timesBold.widthOfTextAtSize(line, 14)
-    currentPage.drawText(line, {
-      x: (PAGE_WIDTH - titleWidth) / 2,
-      y: yPosition,
-      size: 14,
-      font: timesBold,
-      color: rgb(0, 0, 0),
-    })
-    yPosition -= 18
-  }
-  yPosition -= 10
+  // Safe text drawing that ensures no overlap by calculating exact height needed
+  const drawCenteredText = (
+    text: string,
+    font: PDFFont,
+    fontSize: number,
+    lineHeight: number,
+    maxWidth: number
+  ): number => {
+    const lines = wrapText(text, font, fontSize, maxWidth)
+    let totalHeight = 0
 
-  // Draw authors (centered)
-  if (content.authors) {
-    const authorLines = wrapText(content.authors, timesRoman, 11, PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT)
-    for (const line of authorLines) {
-      const authorWidth = timesRoman.widthOfTextAtSize(line, 11)
+    for (const line of lines) {
+      const textWidth = font.widthOfTextAtSize(line, fontSize)
+      const xPosition = (PAGE_WIDTH - textWidth) / 2
+
       currentPage.drawText(line, {
-        x: (PAGE_WIDTH - authorWidth) / 2,
+        x: Math.max(MARGIN_LEFT, xPosition), // Ensure we don't go past left margin
         y: yPosition,
-        size: 11,
-        font: timesRoman,
+        size: fontSize,
+        font: font,
         color: rgb(0, 0, 0),
       })
-      yPosition -= 14
+
+      yPosition -= lineHeight
+      totalHeight += lineHeight
     }
+
+    return totalHeight
   }
 
-  // Draw affiliations (centered, italic)
-  if (content.affiliations) {
-    const affLines = wrapText(content.affiliations, timesItalic, 10, PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT)
-    for (const line of affLines) {
-      const affWidth = timesItalic.widthOfTextAtSize(line, 10)
-      currentPage.drawText(line, {
-        x: (PAGE_WIDTH - affWidth) / 2,
-        y: yPosition,
-        size: 10,
-        font: timesItalic,
-        color: rgb(0, 0, 0),
-      })
-      yPosition -= 13
-    }
+  // ========== TITLE SECTION ==========
+  // Draw title with proper wrapping and centering
+  const titleText = content.title.toUpperCase()
+  drawCenteredText(titleText, timesBold, 14, HEADER_LINE_HEIGHT, TITLE_MAX_WIDTH)
+  
+  // Add spacing after title
+  yPosition -= 12
+
+  // ========== AUTHORS SECTION ==========
+  if (content.authors && content.authors.trim()) {
+    // Split authors by comma and handle each
+    const authorText = content.authors.trim()
+    drawCenteredText(authorText, timesRoman, 11, AUTHOR_LINE_HEIGHT, TITLE_MAX_WIDTH)
+    yPosition -= 4
   }
 
-  yPosition -= 20
+  // ========== AFFILIATIONS SECTION ==========
+  if (content.affiliations && content.affiliations.trim()) {
+    const affiliationText = content.affiliations.trim()
+    drawCenteredText(affiliationText, timesItalic, 10, AFFILIATION_LINE_HEIGHT, TITLE_MAX_WIDTH)
+  }
 
-  // Draw Abstract (full width, italic label)
+  // Add spacing before abstract
+  yPosition -= 24
+
+  // ========== ABSTRACT SECTION ==========
+  // Draw Abstract heading
   currentPage.drawText("Abstract:", {
     x: MARGIN_LEFT,
     y: yPosition,
@@ -139,11 +173,16 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
     color: rgb(0, 0, 0),
   })
 
-  const abstractText = content.abstract
-  const abstractLines = wrapText(abstractText, timesItalic, 9, PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT)
-
   yPosition -= 12
+
+  // Draw abstract content
+  const abstractLines = wrapText(content.abstract, timesItalic, 9, PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT)
   for (const line of abstractLines) {
+    // Check if we need a new page (shouldn't happen in abstract, but safety check)
+    if (yPosition < MARGIN_BOTTOM) {
+      addNewPage()
+    }
+    
     currentPage.drawText(line, {
       x: MARGIN_LEFT,
       y: yPosition,
@@ -156,11 +195,16 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
 
   yPosition -= 8
 
-  // Draw Keywords
+  // ========== KEYWORDS SECTION ==========
   if (content.keywords && content.keywords.length > 0) {
     const keywordsText = `Keywords: ${content.keywords.join(", ")}`
     const keywordLines = wrapText(keywordsText, timesItalic, 9, PAGE_WIDTH - MARGIN_LEFT - MARGIN_RIGHT)
+    
     for (const line of keywordLines) {
+      if (yPosition < MARGIN_BOTTOM) {
+        addNewPage()
+      }
+      
       currentPage.drawText(line, {
         x: MARGIN_LEFT,
         y: yPosition,
@@ -172,15 +216,17 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
     }
   }
 
-  yPosition -= 20
+  // Add spacing before two-column content
+  yPosition -= 24
 
-  // Start two-column layout for sections
+  // ========== MAIN CONTENT (TWO-COLUMN) ==========
   let sectionNumber = 1
 
   for (const section of content.sections) {
-    // Draw section heading
-    checkSpace(30)
+    // Check space for section heading (need at least heading + 2 lines of content)
+    checkSpace(50)
 
+    // Draw section heading
     const sectionHeading = `${toRoman(sectionNumber)}. ${section.heading.toUpperCase()}`
     const headingX = getColumnX(currentColumn)
 
@@ -192,10 +238,10 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
       color: rgb(0, 0, 0),
     })
 
-    yPosition -= LINE_HEIGHT + 4
+    yPosition -= LINE_HEIGHT + 6
 
     // Draw section content
-    const paragraphs = section.content.split(/\n+/)
+    const paragraphs = section.content.split(/\n+/).filter(p => p.trim())
 
     for (const paragraph of paragraphs) {
       if (!paragraph.trim()) continue
@@ -206,7 +252,7 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
         checkSpace(LINE_HEIGHT)
 
         const lineX = getColumnX(currentColumn)
-        // Add indent for first line of paragraph
+        // Add indent for first line of paragraph only
         const indent = i === 0 ? 18 : 0
 
         currentPage.drawText(lines[i], {
@@ -223,12 +269,12 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
       yPosition -= PARAGRAPH_SPACING
     }
 
-    yPosition -= 8
+    yPosition -= 10
     sectionNumber++
   }
 
-  // Draw References section
-  checkSpace(30)
+  // ========== REFERENCES SECTION ==========
+  checkSpace(40)
 
   currentPage.drawText("REFERENCES", {
     x: getColumnX(currentColumn),
@@ -238,10 +284,10 @@ export async function generateIEEEPaper(content: PaperContent): Promise<Uint8Arr
     color: rgb(0, 0, 0),
   })
 
-  yPosition -= LINE_HEIGHT + 4
+  yPosition -= LINE_HEIGHT + 6
 
   for (const ref of content.references) {
-    checkSpace(LINE_HEIGHT * 3)
+    checkSpace(LINE_HEIGHT * 4) // References can be multi-line
 
     const refLines = wrapText(ref, timesRoman, 8, COLUMN_WIDTH)
     for (const line of refLines) {
