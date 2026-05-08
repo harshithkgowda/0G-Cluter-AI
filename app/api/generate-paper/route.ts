@@ -210,7 +210,10 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] PDF generated successfully, size:", pdfBytes.length)
 
-    return new NextResponse(pdfBytes, {
+    // Convert Uint8Array to Buffer for proper Response handling
+    const pdfBuffer = Buffer.from(pdfBytes)
+    
+    return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'attachment; filename="ai-conference-paper.pdf"',
