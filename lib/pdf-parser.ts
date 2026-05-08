@@ -28,8 +28,9 @@ const DEFAULT_SECTIONS: PaperSection[] = [
 
 export async function parsePDF(buffer: Buffer): Promise<ParsedPaper> {
   try {
-    // Try to dynamically import pdf-parse
-    const pdfParse = await import("pdf-parse").then((m) => m.default || m)
+    // Use require for pdf-parse as it doesn't have proper ESM support
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse")
     const data = await pdfParse(buffer)
     const text = data.text
 
@@ -144,7 +145,8 @@ function extractAffiliations(text: string): string[] {
 }
 
 function extractAbstract(text: string): string {
-  const abstractMatch = text.match(/abstract[:\s]*(.+?)(?=keywords|introduction|I\.\s|1\.\s)/is)
+  // Use [\s\S] instead of . with s flag for cross-line matching
+  const abstractMatch = text.match(/abstract[:\s]*([\s\S]+?)(?=keywords|introduction|I\.\s|1\.\s)/i)
   if (abstractMatch) {
     return abstractMatch[1].replace(/\s+/g, " ").trim()
   }
@@ -152,7 +154,8 @@ function extractAbstract(text: string): string {
 }
 
 function extractKeywords(text: string): string[] {
-  const keywordsMatch = text.match(/keywords[:\s-]*(.+?)(?=\n\s*\n|introduction|I\.\s|1\.\s)/is)
+  // Use [\s\S] instead of . with s flag for cross-line matching
+  const keywordsMatch = text.match(/keywords[:\s-]*([\s\S]+?)(?=\n\s*\n|introduction|I\.\s|1\.\s)/i)
   if (keywordsMatch) {
     const keywordsText = keywordsMatch[1].trim()
     return keywordsText
@@ -207,7 +210,8 @@ function cleanHeading(heading: string): string {
 function extractReferences(text: string): string[] {
   const references: string[] = []
 
-  const referencesMatch = text.match(/references\s*\n(.+)$/is)
+  // Use [\s\S] instead of . with s flag for cross-line matching
+  const referencesMatch = text.match(/references\s*\n([\s\S]+)$/i)
   if (referencesMatch) {
     const refText = referencesMatch[1]
     // Split by reference numbers [1], [2], etc.

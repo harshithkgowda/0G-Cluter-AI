@@ -248,7 +248,8 @@ function identifySection(line: string): string | null {
 // Parse PDF content (extracted text) and structure it
 export async function parsePDFContent(buffer: Buffer): Promise<ParsedUserContent> {
   try {
-    const pdfParse = await import("pdf-parse").then((m) => m.default || m)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse")
     const data = await pdfParse(buffer)
     return parseUserContent(data.text)
   } catch (error) {

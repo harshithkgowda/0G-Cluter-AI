@@ -160,7 +160,7 @@ Generate substantial, detailed academic content for each section. Make it sound 
       // Fix unescaped newlines in strings
       .replace(/(?<!\\)\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)/g, '\\n')
       // Remove any control characters
-      .replace(/[\x00-\x1F\x7F]/g, (match) => {
+      .replace(/[\x00-\x1F\x7F]/g, (match: string) => {
         if (match === '\n' || match === '\r' || match === '\t') return match
         return ''
       })
