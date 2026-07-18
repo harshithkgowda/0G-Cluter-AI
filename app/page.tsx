@@ -38,10 +38,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { useWallet } from "@/hooks/use-wallet"
 import { useGenerationHistory } from "@/hooks/use-generation-history"
-import { WalletConnect } from "@/components/wallet-connect"
+import { useCredits } from "@/hooks/use-credits"
 import { HistoryPanel, HistoryToggle } from "@/components/history-panel"
 import { ZeroGSteps, useZeroGSteps } from "@/components/zerog-steps"
+import { CreditsPanel, CreditsButton } from "@/components/credits-panel"
 import { History } from "lucide-react"
+
+// Declare Razorpay for TypeScript
+declare global {
+  interface Window {
+    Razorpay: any
+  }
+}
 
 // Template types
 interface Template {
@@ -138,6 +146,110 @@ export default function GeneratorPage() {
   
   // 0G Steps Animation
   const zeroGSteps = useZeroGSteps()
+
+  // Credits System
+  const { credits, isPremium, subscriptionEnd, isLoaded: creditsLoaded, useCredits: consumeCredits, addCredits, activatePremium, hasCredits } = useCredits()
+  const [isCreditsPanelOpen, setIsCreditsPanelOpen] = useState(false)
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false)
+
+  // Load Razorpay script
+  useEffect(() => {
+    const script = document.createElement("script")
+    script.src = "https://checkout.razorpay.com/v1/checkout.js"
+    script.async = true
+    document.body.appendChild(script)
+    return () => {
+      document.body.removeChild(script)
+    }
+  }, [])
+
+  // Handle Razorpay payment
+  const handlePurchase = async (packageId: string) => {
+    setIsPaymentProcessing(true)
+    try {
+      // Create order
+      const orderResponse = await fetch("/api/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packageId }),
+      })
+
+      if (!orderResponse.ok) {
+        throw new Error("Failed to create order")
+      }
+
+      const orderData = await orderResponse.json()
+
+      // Open Razorpay checkout
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "Cluter AI",
+        description: orderData.packageName,
+        order_id: orderData.orderId,
+        handler: async (response: any) => {
+          // Verify payment
+          const verifyResponse = await fetch("/api/razorpay/verify-payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              credits: orderData.credits,
+              subscription: orderData.subscription,
+              durationDays: orderData.durationDays,
+            }),
+          })
+
+          const verifyData = await verifyResponse.json()
+
+          if (verifyData.success) {
+            if (verifyData.subscription) {
+              activatePremium(verifyData.durationDays)
+              toast({
+                title: "Premium Activated!",
+                description: `You now have unlimited generations for ${verifyData.durationDays} days`,
+              })
+            } else {
+              addCredits(verifyData.credits)
+              toast({
+                title: "Credits Added!",
+                description: `${verifyData.credits} credits have been added to your account`,
+              })
+            }
+            setIsCreditsPanelOpen(false)
+          } else {
+            toast({
+              title: "Payment verification failed",
+              description: "Please contact support if you were charged",
+              variant: "destructive",
+            })
+          }
+        },
+        prefill: {
+          name: "",
+          email: "",
+        },
+        theme: {
+          color: "#000000",
+        },
+      }
+
+      const razorpay = new window.Razorpay(options)
+      razorpay.open()
+    } catch (error) {
+      console.error("[v0] Payment error:", error)
+      toast({
+        title: "Payment failed",
+        description: "There was an error processing your payment",
+        variant: "destructive",
+      })
+    } finally {
+      setIsPaymentProcessing(false)
+    }
+  }
 
   // 0G Storage State
   const [zeroGStatus, setZeroGStatus] = useState<{
@@ -326,6 +438,27 @@ export default function GeneratorPage() {
       return
     }
 
+    // Check credits
+    if (!hasCredits) {
+      toast({
+        title: "No credits remaining",
+        description: "Please purchase more credits to continue",
+        variant: "destructive",
+      })
+      setIsCreditsPanelOpen(true)
+      return
+    }
+
+    // Consume credit
+    if (!consumeCredits(1)) {
+      toast({
+        title: "Failed to use credits",
+        description: "Please try again",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsPaperGenerating(true)
     setPaperProgress(0)
     setGeneratedPaperFile(null)
@@ -496,6 +629,27 @@ export default function GeneratorPage() {
       return
     }
 
+    // Check credits
+    if (!hasCredits) {
+      toast({
+        title: "No credits remaining",
+        description: "Please purchase more credits to continue",
+        variant: "destructive",
+      })
+      setIsCreditsPanelOpen(true)
+      return
+    }
+
+    // Consume credit
+    if (!consumeCredits(1)) {
+      toast({
+        title: "Failed to use credits",
+        description: "Please try again",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsPptGenerating(true)
     setPptProgress(0)
     setGeneratedPptFile(null)
@@ -509,14 +663,20 @@ export default function GeneratorPage() {
       formData.append("isBlank", isBlankPpt.toString())
 
       const progressInterval = setInterval(() => {
-        setPptProgress((prev) => Math.min(prev + 10, 90))
-      }, 500)
+        setPptProgress((prev) => Math.min(prev + 5, 90))
+      }, 1000)
+
+      // Use AbortController with 5 minute timeout for large files
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minutes
 
       const response = await fetch("/api/generate-ppt", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       })
 
+      clearTimeout(timeoutId)
       clearInterval(progressInterval)
       setPptProgress(100)
 
@@ -565,9 +725,17 @@ export default function GeneratorPage() {
       })
     } catch (error) {
       console.error("[v0] Error generating PPT:", error)
+      let errorMessage = "There was an error generating your presentation"
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          errorMessage = "Request timed out. Try with a smaller file or fewer slides."
+        } else {
+          errorMessage = error.message
+        }
+      }
       toast({
         title: "Generation failed",
-        description: error instanceof Error ? error.message : "There was an error generating your presentation",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -662,6 +830,27 @@ export default function GeneratorPage() {
       toast({
         title: "Missing information",
         description: "Please upload a document and provide a prompt",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check credits
+    if (!hasCredits) {
+      toast({
+        title: "No credits remaining",
+        description: "Please purchase more credits to continue",
+        variant: "destructive",
+      })
+      setIsCreditsPanelOpen(true)
+      return
+    }
+
+    // Consume credit
+    if (!consumeCredits(1)) {
+      toast({
+        title: "Failed to use credits",
+        description: "Please try again",
         variant: "destructive",
       })
       return
@@ -783,6 +972,15 @@ export default function GeneratorPage() {
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-3">
+            {/* Credits Button */}
+            {creditsLoaded && (
+              <CreditsButton
+                credits={credits}
+                isPremium={isPremium}
+                onClick={() => setIsCreditsPanelOpen(true)}
+              />
+            )}
+            
             {/* History Button */}
             <HistoryToggle count={history.length} onClick={() => setIsHistoryOpen(true)} />
             
@@ -1579,6 +1777,17 @@ export default function GeneratorPage() {
         onClear={clearHistory}
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
+      />
+
+      {/* Credits Panel */}
+      <CreditsPanel
+        isOpen={isCreditsPanelOpen}
+        onClose={() => setIsCreditsPanelOpen(false)}
+        credits={credits}
+        isPremium={isPremium}
+        subscriptionEnd={subscriptionEnd}
+        onPurchase={handlePurchase}
+        isProcessing={isPaymentProcessing}
       />
 
       {/* 0G Steps Overlay - shows when uploading */}

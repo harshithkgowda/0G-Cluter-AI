@@ -19,6 +19,14 @@ export async function generateContentWithAI(prompt: string, slideCount?: number)
     throw new Error("OPENROUTER_API_KEY is not configured. Please add it to your environment variables.")
   }
 
+  // Validate API key format (should start with sk-or-)
+  if (!apiKey.startsWith("sk-or-")) {
+    console.error("[v0] Invalid API key format. Expected sk-or-... but got:", apiKey.substring(0, 10) + "...")
+    throw new Error("Invalid OpenRouter API key format. Key should start with 'sk-or-'")
+  }
+
+  console.log("[v0] Using OpenRouter API key:", apiKey.substring(0, 12) + "..." + apiKey.substring(apiKey.length - 4))
+
   const headers = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
@@ -93,6 +101,11 @@ For imageQuery, use VERY SHORT simple keywords (max 25 characters) like "teamwor
   if (!response.ok) {
     const error = await response.text()
     console.error("[v0] OpenRouter API error:", response.status, error)
+    
+    if (response.status === 401) {
+      throw new Error("OpenRouter API key is invalid or expired. Please check your OPENROUTER_API_KEY in environment variables.")
+    }
+    
     throw new Error(`OpenRouter API failed: ${response.status} - ${error}`)
   }
 
