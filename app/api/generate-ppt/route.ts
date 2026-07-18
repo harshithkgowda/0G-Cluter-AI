@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const zip = new PizZip(arrayBuffer)
 
     // Step 2: Generate content with AI
-    console.log("[v0] Generating content with Gemini 2.0 Flash...")
+    console.log("[v0] Generating content with Gemini 2.5 Flash...")
     const generatedContent = await generateContentWithAI(prompt, slideCount)
 
     console.log("[v0] Generated content for", generatedContent.slides.length, "slides")
