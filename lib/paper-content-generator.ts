@@ -153,14 +153,86 @@ Generate substantial, detailed academic content for each section. Make it sound 
       throw new Error("Failed to parse generated content - no JSON found")
     }
 
+    // Clean up common JSON issues from AI responses
+    let cleanedJson = jsonMatch[0]
+      // Remove trailing commas before } or ]
+      .replace(/,(\s*[}\]])/g, '$1')
+      // Fix unescaped newlines in strings
+      .replace(/(?<!\\)\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)/g, '\\n')
+      // Remove any control characters
+      .replace(/[\x00-\x1F\x7F]/g, (match: string) => {
+        if (match === '\n' || match === '\r' || match === '\t') return match
+        return ''
+      })
+
     try {
-      const parsed = JSON.parse(jsonMatch[0]) as GeneratedPaperContent
+      const parsed = JSON.parse(cleanedJson) as GeneratedPaperContent
       console.log("[v0] Successfully parsed paper content")
       console.log("[v0] Sections generated:", parsed.sections?.length || 0)
       return parsed
     } catch (parseError) {
-      console.error("[v0] JSON parse error:", parseError)
-      console.error("[v0] Attempted to parse:", jsonMatch[0].substring(0, 500))
+      console.error("[v0] JSON parse error after cleanup:", parseError)
+      
+      // Try a more aggressive cleanup
+      try {
+        // Extract just the essential fields manually if JSON is truncated
+        const titleMatch = cleanedJson.match(/"title"\s*:\s*"([^"]+)"/)
+        const abstractMatch = cleanedJson.match(/"abstract"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"keywords")/)
+        const keywordsMatch = cleanedJson.match(/"keywords"\s*:\s*\[([\s\S]*?)\]/)
+        
+        if (titleMatch && abstractMatch) {
+          console.log("[v0] Using fallback parsing for truncated response")
+          
+          // Parse sections array
+          const sectionsMatch = cleanedJson.match(/"sections"\s*:\s*\[([\s\S]*?)\](?=\s*,\s*"references"|\s*\}$)/)
+          const sections: { heading: string; content: string }[] = []
+          
+          if (sectionsMatch) {
+            const sectionRegex = /\{\s*"heading"\s*:\s*"([^"]+)"\s*,\s*"content"\s*:\s*"([\s\S]*?)"\s*\}/g
+            let match
+            while ((match = sectionRegex.exec(sectionsMatch[1])) !== null) {
+              sections.push({ heading: match[1], content: match[2].replace(/\\n/g, '\n').replace(/\\"/g, '"') })
+            }
+          }
+          
+          // Parse references
+          const refsMatch = cleanedJson.match(/"references"\s*:\s*\[([\s\S]*?)\]/)
+          const references: string[] = []
+          if (refsMatch) {
+            const refRegex = /"([^"]+)"/g
+            let refMatch
+            while ((refMatch = refRegex.exec(refsMatch[1])) !== null) {
+              references.push(refMatch[1])
+            }
+          }
+          
+          // Parse keywords
+          const keywords: string[] = []
+          if (keywordsMatch) {
+            const kwRegex = /"([^"]+)"/g
+            let kwMatch
+            while ((kwMatch = kwRegex.exec(keywordsMatch[1])) !== null) {
+              keywords.push(kwMatch[1])
+            }
+          }
+          
+          return {
+            title: titleMatch[1],
+            abstract: abstractMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+            keywords: keywords.length > 0 ? keywords : ["AI", "Machine Learning", "Research"],
+            sections: sections.length > 0 ? sections : [
+              { heading: "INTRODUCTION", content: "Content generation was truncated. Please try again." }
+            ],
+            references: references.length > 0 ? references : [
+              "[1] Reference data was truncated."
+            ]
+          }
+        }
+      } catch (fallbackError) {
+        console.error("[v0] Fallback parsing also failed:", fallbackError)
+      }
+      
+      console.error("[v0] Attempted to parse:", cleanedJson.substring(0, 500))
       throw new Error("Failed to parse AI response as JSON")
     }
   } catch (error) {

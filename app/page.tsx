@@ -116,6 +116,12 @@ export default function GeneratorPage() {
   const [paperProgress, setPaperProgress] = useState(0)
   const [generatedPaperFile, setGeneratedPaperFile] = useState<Blob | null>(null)
   const [paperResult, setPaperResult] = useState<GenerationResult | null>(null)
+  
+  // User Content Import State
+  const [useUserContent, setUseUserContent] = useState(false)
+  const [userContentText, setUserContentText] = useState("")
+  const [userContentFile, setUserContentFile] = useState<File | null>(null)
+  const [contentInputMode, setContentInputMode] = useState<"text" | "pdf">("text")
 
   // PPT Generator State
   const [pptFile, setPptFile] = useState<File | null>(null)
@@ -130,6 +136,7 @@ export default function GeneratorPage() {
   // Word Generator State
   const [wordFile, setWordFile] = useState<File | null>(null)
   const [wordPrompt, setWordPrompt] = useState("")
+  const [wordDocType, setWordDocType] = useState<string>("default")
   const [isWordGenerating, setIsWordGenerating] = useState(false)
   const [wordProgress, setWordProgress] = useState(0)
   const [generatedWordFile, setGeneratedWordFile] = useState<Blob | null>(null)
@@ -420,13 +427,27 @@ export default function GeneratorPage() {
   }
 
   const handlePaperGenerate = async () => {
-    if (!paperPrompt.trim()) {
-      toast({
-        title: "Missing information",
-        description: "Please provide a research topic",
-        variant: "destructive",
-      })
-      return
+    // Validation based on content mode
+    if (useUserContent) {
+      // User content mode - need either text or PDF file
+      if (!userContentText.trim() && !userContentFile) {
+        toast({
+          title: "Missing content",
+          description: "Please provide your paper content as text or upload a PDF",
+          variant: "destructive",
+        })
+        return
+      }
+    } else {
+      // AI generation mode - need prompt
+      if (!paperPrompt.trim()) {
+        toast({
+          title: "Missing information",
+          description: "Please provide a research topic",
+          variant: "destructive",
+        })
+        return
+      }
     }
 
     if (!selectedTemplate && !paperFile) {
@@ -474,6 +495,17 @@ export default function GeneratorPage() {
       formData.append("authors", authors)
       if (selectedTemplate) {
         formData.append("templateId", selectedTemplate.id)
+      }
+      
+      // Add user content data
+      formData.append("useUserContent", useUserContent.toString())
+      if (useUserContent) {
+        if (userContentText.trim()) {
+          formData.append("userContent", userContentText)
+        }
+        if (userContentFile) {
+          formData.append("userContentFile", userContentFile)
+        }
       }
 
       const progressInterval = setInterval(() => {
@@ -569,6 +601,31 @@ export default function GeneratorPage() {
     setGeneratedPaperFile(null)
     setPaperResult(null)
     setDocumentMode("template")
+    // Reset user content state
+    setUseUserContent(false)
+    setUserContentText("")
+    setUserContentFile(null)
+    setContentInputMode("text")
+  }
+  
+  // User content file upload handler
+  const handleUserContentFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const uploadedFile = e.target.files?.[0]
+    if (uploadedFile) {
+      if (uploadedFile.type === "application/pdf") {
+        setUserContentFile(uploadedFile)
+        toast({
+          title: "Content file uploaded",
+          description: `${uploadedFile.name} will be parsed and applied to your selected template`,
+        })
+      } else {
+        toast({
+          title: "Invalid file type",
+          description: "Please upload a PDF file containing your paper content",
+          variant: "destructive",
+        })
+      }
+    }
   }
 
   // PPT Handlers
@@ -865,6 +922,7 @@ export default function GeneratorPage() {
       const formData = new FormData()
       formData.append("file", wordFile)
       formData.append("prompt", wordPrompt)
+      formData.append("documentType", wordDocType)
 
       const progressInterval = setInterval(() => {
         setWordProgress((prev) => Math.min(prev + 8, 90))
@@ -953,6 +1011,7 @@ export default function GeneratorPage() {
   const handleWordStartOver = () => {
     setWordFile(null)
     setWordPrompt("")
+    setWordDocType("default")
     setGeneratedWordFile(null)
     setWordResult(null)
   }
@@ -1239,14 +1298,37 @@ export default function GeneratorPage() {
               {/* Research Details */}
               <Card className="p-6 md:p-8">
                 <div className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                      2
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
+                        2
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-semibold text-foreground">
+                          {useUserContent ? "Import Your Content" : "Describe Your Research"}
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          {useUserContent 
+                            ? "Paste your paper content or upload a PDF to apply to the template" 
+                            : "AI will generate content for each section"}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-xl font-semibold text-foreground">Describe Your Research</h2>
-                      <p className="text-sm text-muted-foreground">AI will generate content for each section</p>
+                  </div>
+
+                  {/* Content Mode Toggle */}
+                  <div className="flex items-center justify-between p-4 bg-accent/30 rounded-lg border border-border">
+                    <div className="flex items-center gap-3">
+                      <BookOpen className="w-5 h-5 text-primary" />
+                      <div>
+                        <p className="font-medium text-foreground text-sm">Use Your Own Content</p>
+                        <p className="text-xs text-muted-foreground">Import existing paper content instead of AI generation</p>
+                      </div>
                     </div>
+                    <Switch
+                      checked={useUserContent}
+                      onCheckedChange={setUseUserContent}
+                    />
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
@@ -1270,23 +1352,147 @@ export default function GeneratorPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="paper-prompt">Research Topic & Details</Label>
-                    <Textarea
-                      id="paper-prompt"
-                      placeholder="Describe your research topic in detail. Include methodology, key findings, and objectives. The more detail you provide, the better the AI-generated content will be."
-                      value={paperPrompt}
-                      onChange={(e) => setPaperPrompt(e.target.value)}
-                      className="min-h-32 resize-none"
-                    />
-                  </div>
+                  {/* Conditional Content Input */}
+                  {useUserContent ? (
+                    <div className="space-y-4">
+                      {/* Content Input Mode Selection */}
+                      <div className="flex gap-2">
+                        <Button
+                          variant={contentInputMode === "text" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setContentInputMode("text")}
+                          className="gap-2"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Paste Text
+                        </Button>
+                        <Button
+                          variant={contentInputMode === "pdf" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setContentInputMode("pdf")}
+                          className="gap-2"
+                        >
+                          <FileType className="w-4 h-4" />
+                          Upload PDF
+                        </Button>
+                      </div>
 
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground bg-accent/50 p-3 rounded-lg">
-                    <Wand2 className="w-4 h-4 flex-shrink-0" />
-                    <span>
-                      AI will generate Abstract, Introduction, Methodology, Results, Conclusion, and References
-                    </span>
-                  </div>
+                      {contentInputMode === "text" ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="user-content">Your Paper Content</Label>
+                          <Textarea
+                            id="user-content"
+                            placeholder={`Paste your complete paper content here. Include all sections with their headings.
+
+Example format:
+ABSTRACT
+Your abstract text here...
+
+INTRODUCTION
+Your introduction content...
+
+METHODOLOGY
+Your methodology details...
+
+RESULTS AND DISCUSSION
+Your results...
+
+CONCLUSION
+Your conclusions...
+
+REFERENCES
+[1] First reference...
+[2] Second reference...`}
+                            value={userContentText}
+                            onChange={(e) => setUserContentText(e.target.value)}
+                            className="min-h-64 resize-none font-mono text-sm"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Include section headings (INTRODUCTION, METHODOLOGY, etc.) - the system will automatically detect and map them to the template.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label>Upload Your Paper PDF</Label>
+                          <div
+                            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
+                              userContentFile ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            <input
+                              type="file"
+                              id="user-content-file"
+                              accept=".pdf"
+                              onChange={handleUserContentFileUpload}
+                              className="hidden"
+                            />
+                            <label htmlFor="user-content-file" className="cursor-pointer">
+                              <div className="flex flex-col items-center gap-3">
+                                {userContentFile ? (
+                                  <>
+                                    <FileType className="w-12 h-12 text-primary" />
+                                    <div>
+                                      <p className="font-medium text-foreground">{userContentFile.name}</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {(userContentFile.size / 1024 / 1024).toFixed(2)} MB
+                                      </p>
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        setUserContentFile(null)
+                                      }}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="w-12 h-12 text-muted-foreground" />
+                                    <div>
+                                      <p className="font-medium text-foreground">Upload Your Paper PDF</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        Content will be extracted and mapped to the selected template
+                                      </p>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground bg-blue-500/10 p-3 rounded-lg border border-blue-500/20">
+                        <BookOpen className="w-4 h-4 flex-shrink-0 text-blue-500" />
+                        <span>
+                          Your content will be automatically parsed and mapped to the template sections based on headings.
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="paper-prompt">Research Topic & Details</Label>
+                        <Textarea
+                          id="paper-prompt"
+                          placeholder="Describe your research topic in detail. Include methodology, key findings, and objectives. The more detail you provide, the better the AI-generated content will be."
+                          value={paperPrompt}
+                          onChange={(e) => setPaperPrompt(e.target.value)}
+                          className="min-h-32 resize-none"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground bg-accent/50 p-3 rounded-lg">
+                        <Wand2 className="w-4 h-4 flex-shrink-0" />
+                        <span>
+                          AI will generate Abstract, Introduction, Methodology, Results, Conclusion, and References
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </Card>
 
@@ -1346,19 +1552,35 @@ export default function GeneratorPage() {
                   {!paperResult && (
                     <Button
                       onClick={handlePaperGenerate}
-                      disabled={isPaperGenerating || (!selectedTemplate && !paperFile) || !paperPrompt.trim()}
+                      disabled={
+                        isPaperGenerating || 
+                        (!selectedTemplate && !paperFile) || 
+                        (useUserContent 
+                          ? (!userContentText.trim() && !userContentFile)
+                          : !paperPrompt.trim()
+                        )
+                      }
                       className="w-full h-12 text-base gap-2"
                       size="lg"
                     >
                       {isPaperGenerating ? (
                         <>
                           <Loader2 className="w-5 h-5 animate-spin" />
-                          Generating Paper...
+                          {useUserContent ? "Applying Content..." : "Generating Paper..."}
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-5 h-5" />
-                          Generate Conference Paper
+                          {useUserContent ? (
+                            <>
+                              <BookOpen className="w-5 h-5" />
+                              Apply Content to Template
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-5 h-5" />
+                              Generate Conference Paper
+                            </>
+                          )}
                           <ChevronRight className="w-4 h-4" />
                         </>
                       )}
@@ -1643,7 +1865,7 @@ export default function GeneratorPage() {
                 </div>
               </Card>
 
-              {/* Word Prompt */}
+              {/* Word Settings */}
               <Card className="p-6 md:p-8">
                 <div className="space-y-6">
                   <div className="flex items-center gap-3">
@@ -1651,8 +1873,26 @@ export default function GeneratorPage() {
                       2
                     </div>
                     <div>
-                      <h2 className="text-xl font-semibold text-foreground">Describe Your Requirements</h2>
-                      <p className="text-sm text-muted-foreground">Tell AI what content to generate</p>
+                      <h2 className="text-xl font-semibold text-foreground">Configure Document</h2>
+                      <p className="text-sm text-muted-foreground">Select document type and describe your content</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="doc-type">Document Type</Label>
+                      <Select value={wordDocType} onValueChange={setWordDocType}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">General Document</SelectItem>
+                          <SelectItem value="report">Business Report</SelectItem>
+                          <SelectItem value="proposal">Project Proposal</SelectItem>
+                          <SelectItem value="article">Article / Blog Post</SelectItem>
+                          <SelectItem value="research">Research Paper</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -1660,7 +1900,7 @@ export default function GeneratorPage() {
                     <Label htmlFor="word-prompt">Content Requirements</Label>
                     <Textarea
                       id="word-prompt"
-                      placeholder="Describe what you want the document to contain. AI will analyze your template structure and replace the content accordingly while maintaining the formatting."
+                      placeholder="Describe what you want the document to contain. Be specific about the topic, key points, target audience, and any particular sections or data you want included. AI will generate professional content matching your template structure."
                       value={wordPrompt}
                       onChange={(e) => setWordPrompt(e.target.value)}
                       className="min-h-32 resize-none"
@@ -1669,7 +1909,7 @@ export default function GeneratorPage() {
 
                   <div className="flex items-center gap-2 text-sm text-muted-foreground bg-accent/50 p-3 rounded-lg">
                     <Wand2 className="w-4 h-4 flex-shrink-0" />
-                    <span>AI will preserve document structure and replace text while maintaining formatting</span>
+                    <span>AI analyzes your template structure and generates content to match each section while preserving formatting</span>
                   </div>
                 </div>
               </Card>

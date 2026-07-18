@@ -14,25 +14,15 @@ export interface ImageData {
 }
 
 // EMU conversions (914400 EMUs = 1 inch)
-const EMU_PER_INCH = 914400
-const SLIDE_WIDTH = 9144000 // 10 inches in EMUs
+// Standard PowerPoint slide dimensions (16:9 widescreen) - used as defaults
+const SLIDE_WIDTH = 12192000 // 13.33 inches in EMUs (widescreen)
 const SLIDE_HEIGHT = 6858000 // 7.5 inches in EMUs
 
-// Safe content areas (avoid template decorations)
-const CONTENT_MARGIN_LEFT = Math.floor(SLIDE_WIDTH * 0.05)
-const CONTENT_MARGIN_TOP = Math.floor(SLIDE_HEIGHT * 0.15)
-const CONTENT_WIDTH = Math.floor(SLIDE_WIDTH * 0.55)
-const TITLE_HEIGHT = Math.floor(SLIDE_HEIGHT * 0.12)
-const CONTENT_HEIGHT = Math.floor(SLIDE_HEIGHT * 0.65)
-
-// Image positioning
-const IMAGE_LEFT = Math.floor(SLIDE_WIDTH * 0.62)
-const IMAGE_TOP = Math.floor(SLIDE_HEIGHT * 0.18)
-const IMAGE_WIDTH = Math.floor(SLIDE_WIDTH * 0.33)
-const IMAGE_HEIGHT = Math.floor(SLIDE_HEIGHT * 0.55)
-
-// Line height for bullet points
-const LINE_HEIGHT = Math.floor(SLIDE_HEIGHT * 0.08)
+// Typography settings - these remain constant
+const TITLE_FONT_SIZE = 2600 // 26pt - slightly smaller for better fit
+const CONTENT_FONT_SIZE = 1350 // 13.5pt - slightly smaller for better fit
+const LINE_SPACING = 140 // 140% line spacing
+const BULLET_MARGIN = 285750 // 0.3125 inches
 
 function escapeXml(text: string): string {
   return text
@@ -43,7 +33,28 @@ function escapeXml(text: string): string {
     .replace(/'/g, "&apos;")
 }
 
-function createTitleShape(title: string, shapeId: number): string {
+interface LayoutDimensions {
+  safeMargin: number
+  titleTop: number
+  titleHeight: number
+  titleWidth: number
+  contentLeft: number
+  contentTop: number
+  contentWidth: number
+  contentHeight: number
+  imageLeft: number
+  imageTop: number
+  imageWidth: number
+  imageHeight: number
+}
+
+function createTitleShape(title: string, shapeId: number, layout: LayoutDimensions): string {
+  // Truncate title if too long to prevent overflow
+  const maxTitleLength = 55
+  const displayTitle = title.length > maxTitleLength 
+    ? title.substring(0, maxTitleLength - 3) + "..."
+    : title
+
   return `
     <p:sp>
       <p:nvSpPr>
@@ -53,44 +64,57 @@ function createTitleShape(title: string, shapeId: number): string {
       </p:nvSpPr>
       <p:spPr>
         <a:xfrm>
-          <a:off x="${CONTENT_MARGIN_LEFT}" y="${CONTENT_MARGIN_TOP}"/>
-          <a:ext cx="${CONTENT_WIDTH + IMAGE_WIDTH}" cy="${TITLE_HEIGHT}"/>
+          <a:off x="${layout.safeMargin}" y="${layout.titleTop}"/>
+          <a:ext cx="${layout.titleWidth}" cy="${layout.titleHeight}"/>
         </a:xfrm>
         <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
         <a:noFill/>
       </p:spPr>
       <p:txBody>
-        <a:bodyPr wrap="square" anchor="t"/>
+        <a:bodyPr wrap="square" anchor="ctr" lIns="91440" tIns="45720" rIns="91440" bIns="45720">
+          <a:noAutofit/>
+        </a:bodyPr>
         <a:lstStyle/>
         <a:p>
           <a:pPr algn="l"/>
           <a:r>
-            <a:rPr lang="en-US" sz="3200" b="1" dirty="0">
+            <a:rPr lang="en-US" sz="${TITLE_FONT_SIZE}" b="1" dirty="0">
               <a:solidFill><a:srgbClr val="1a1a2e"/></a:solidFill>
-              <a:latin typeface="Arial" panose="020B0604020202020204"/>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
             </a:rPr>
-            <a:t>${escapeXml(title)}</a:t>
+            <a:t>${escapeXml(displayTitle)}</a:t>
           </a:r>
         </a:p>
       </p:txBody>
     </p:sp>`
 }
 
-function createContentShape(bullets: string[], shapeId: number): string {
-  const bulletParagraphs = bullets.map((bullet, idx) => {
-    const yOffset = idx * LINE_HEIGHT
+function createContentShape(bullets: string[], shapeId: number, layout: LayoutDimensions): string {
+  // Limit bullets to prevent overflow and truncate long text
+  const maxBullets = 5
+  const maxBulletLength = 100
+  
+  const limitedBullets = bullets.slice(0, maxBullets).map(bullet => {
+    if (bullet.length > maxBulletLength) {
+      return bullet.substring(0, maxBulletLength - 3) + "..."
+    }
+    return bullet
+  })
+
+  const bulletParagraphs = limitedBullets.map((bullet) => {
     return `
         <a:p>
-          <a:pPr marL="342900" indent="-342900">
-            <a:buFont typeface="Arial" panose="020B0604020202020204"/>
-            <a:buChar char="•"/>
-            <a:spcBef><a:spcPts val="600"/></a:spcBef>
-            <a:spcAft><a:spcPts val="300"/></a:spcAft>
+          <a:pPr marL="${BULLET_MARGIN}" indent="-${BULLET_MARGIN}">
+            <a:buFont typeface="Wingdings" panose="05000000000000000000" pitchFamily="2" charset="2"/>
+            <a:buChar char="§"/>
+            <a:spcBef><a:spcPts val="300"/></a:spcBef>
+            <a:spcAft><a:spcPts val="150"/></a:spcAft>
+            <a:lnSpc><a:spcPct val="${LINE_SPACING}00"/></a:lnSpc>
           </a:pPr>
           <a:r>
-            <a:rPr lang="en-US" sz="1600" dirty="0">
-              <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
-              <a:latin typeface="Arial" panose="020B0604020202020204"/>
+            <a:rPr lang="en-US" sz="${CONTENT_FONT_SIZE}" dirty="0">
+              <a:solidFill><a:srgbClr val="404040"/></a:solidFill>
+              <a:latin typeface="Calibri" panose="020F0502020204030204"/>
             </a:rPr>
             <a:t>${escapeXml(bullet)}</a:t>
           </a:r>
@@ -106,21 +130,23 @@ function createContentShape(bullets: string[], shapeId: number): string {
       </p:nvSpPr>
       <p:spPr>
         <a:xfrm>
-          <a:off x="${CONTENT_MARGIN_LEFT}" y="${CONTENT_MARGIN_TOP + TITLE_HEIGHT + 100000}"/>
-          <a:ext cx="${CONTENT_WIDTH}" cy="${CONTENT_HEIGHT}"/>
+          <a:off x="${layout.contentLeft}" y="${layout.contentTop}"/>
+          <a:ext cx="${layout.contentWidth}" cy="${layout.contentHeight}"/>
         </a:xfrm>
         <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
         <a:noFill/>
       </p:spPr>
       <p:txBody>
-        <a:bodyPr wrap="square" anchor="t" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/>
+        <a:bodyPr wrap="square" anchor="t" lIns="91440" tIns="45720" rIns="91440" bIns="45720">
+          <a:noAutofit/>
+        </a:bodyPr>
         <a:lstStyle/>
         ${bulletParagraphs}
       </p:txBody>
     </p:sp>`
 }
 
-function createImageShape(relId: string, shapeId: number): string {
+function createImageShape(relId: string, shapeId: number, layout: LayoutDimensions): string {
   return `
     <p:pic>
       <p:nvPicPr>
@@ -128,18 +154,95 @@ function createImageShape(relId: string, shapeId: number): string {
         <p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>
         <p:nvPr/>
       </p:nvPicPr>
-      <p:blipFill>
-        <a:blip r:embed="${relId}"/>
+      <p:blipFill rotWithShape="1">
+        <a:blip r:embed="${relId}">
+          <a:extLst>
+            <a:ext uri="{28A0092B-C50C-407E-A947-70E740481C1C}">
+              <a14:useLocalDpi xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main" val="0"/>
+            </a:ext>
+          </a:extLst>
+        </a:blip>
+        <a:srcRect/>
         <a:stretch><a:fillRect/></a:stretch>
       </p:blipFill>
       <p:spPr>
         <a:xfrm>
-          <a:off x="${IMAGE_LEFT}" y="${IMAGE_TOP}"/>
-          <a:ext cx="${IMAGE_WIDTH}" cy="${IMAGE_HEIGHT}"/>
+          <a:off x="${layout.imageLeft}" y="${layout.imageTop}"/>
+          <a:ext cx="${layout.imageWidth}" cy="${layout.imageHeight}"/>
         </a:xfrm>
-        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        <a:prstGeom prst="roundRect">
+          <a:avLst>
+            <a:gd name="adj" fmla="val 4000"/>
+          </a:avLst>
+        </a:prstGeom>
+        <a:ln w="9525">
+          <a:solidFill><a:srgbClr val="D0D0D0"/></a:solidFill>
+        </a:ln>
       </p:spPr>
     </p:pic>`
+}
+
+/**
+ * Extract slide dimensions from presentation.xml
+ */
+function getSlideDimensions(zip: PizZip): { width: number; height: number } {
+  const presentationXml = zip.file("ppt/presentation.xml")?.asText()
+  if (presentationXml) {
+    // Look for sldSz (slide size) element
+    const sldSzMatch = presentationXml.match(/<p:sldSz[^>]*cx="(\d+)"[^>]*cy="(\d+)"/)
+    if (sldSzMatch) {
+      return {
+        width: parseInt(sldSzMatch[1], 10),
+        height: parseInt(sldSzMatch[2], 10)
+      }
+    }
+    // Also try reversed attribute order
+    const sldSzMatchAlt = presentationXml.match(/<p:sldSz[^>]*cy="(\d+)"[^>]*cx="(\d+)"/)
+    if (sldSzMatchAlt) {
+      return {
+        width: parseInt(sldSzMatchAlt[2], 10),
+        height: parseInt(sldSzMatchAlt[1], 10)
+      }
+    }
+  }
+  // Default to standard 16:9 widescreen
+  return { width: SLIDE_WIDTH, height: SLIDE_HEIGHT }
+}
+
+/**
+ * Calculate layout dimensions based on actual slide size
+ */
+function getLayoutDimensions(slideWidth: number, slideHeight: number, hasImage: boolean) {
+  const safeMargin = Math.floor(slideWidth * 0.04)
+  const titleTop = Math.floor(slideHeight * 0.08)
+  const titleHeight = Math.floor(slideHeight * 0.12)
+  const contentTop = titleTop + titleHeight + Math.floor(slideHeight * 0.02)
+  const contentHeight = Math.floor(slideHeight * 0.68)
+  
+  // Content width depends on whether we have an image
+  const contentWidthWithImage = Math.floor(slideWidth * 0.52)
+  const contentWidthNoImage = Math.floor(slideWidth * 0.92)
+  const contentWidth = hasImage ? contentWidthWithImage : contentWidthNoImage
+  
+  // Image area (right side)
+  const imageLeft = Math.floor(slideWidth * 0.58)
+  const imageWidth = Math.floor(slideWidth * 0.38)
+  const imageHeight = Math.floor(slideHeight * 0.60)
+
+  return {
+    safeMargin,
+    titleTop,
+    titleHeight,
+    titleWidth: slideWidth - (safeMargin * 2),
+    contentLeft: safeMargin,
+    contentTop,
+    contentWidth,
+    contentHeight,
+    imageLeft,
+    imageTop: contentTop,
+    imageWidth,
+    imageHeight
+  }
 }
 
 export function modifyPptx(
@@ -149,6 +252,10 @@ export function modifyPptx(
   targetSlideCount?: number,
   isBlank = false
 ): PizZip {
+  // Get actual slide dimensions from the presentation
+  const slideDimensions = getSlideDimensions(zip)
+  console.log(`[v0] Detected slide dimensions: ${slideDimensions.width} x ${slideDimensions.height} EMUs`)
+
   // Get list of slide files
   const slideFiles = Object.keys(zip.files)
     .filter(name => name.match(/^ppt\/slides\/slide\d+\.xml$/))
@@ -176,6 +283,12 @@ export function modifyPptx(
     const baseId = 10000 + (i * 100)
     let shapeId = baseId
 
+    // Determine if we have an image for this slide
+    const hasImage = !!(imageData?.imageBuffer)
+
+    // Get layout dimensions based on actual slide size
+    const layout = getLayoutDimensions(slideDimensions.width, slideDimensions.height, hasImage)
+
     // Clear existing text and picture shapes but keep background elements
     // Remove content between <p:spTree> and </p:spTree>, keeping the opening nvGrpSpPr and grpSpPr
     const spTreeMatch = slideXml.match(/<p:spTree>([\s\S]*?)<\/p:spTree>/)
@@ -187,9 +300,9 @@ export function modifyPptx(
       const nvGrpSpPr = nvGrpSpPrMatch ? nvGrpSpPrMatch[0] : "<p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>"
       const grpSpPr = grpSpPrMatch ? grpSpPrMatch[0] : "<p:grpSpPr/>"
 
-      // Create new content
-      const titleShape = createTitleShape(slideContent.title, shapeId++)
-      const contentShape = createContentShape(slideContent.content, shapeId++)
+      // Create new content using the calculated layout
+      const titleShape = createTitleShape(slideContent.title, shapeId++, layout)
+      const contentShape = createContentShape(slideContent.content, shapeId++, layout)
 
       // Handle image if available
       let imageShape = ""
@@ -227,7 +340,7 @@ export function modifyPptx(
           zip.file(contentTypesPath, contentTypesXml)
         }
 
-        imageShape = createImageShape(newRId, shapeId++)
+        imageShape = createImageShape(newRId, shapeId++, layout)
       }
 
       // Rebuild spTree with new content

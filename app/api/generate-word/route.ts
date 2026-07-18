@@ -5,16 +5,23 @@ import { DOMParser, XMLSerializer } from "@xmldom/xmldom"
 interface DocumentSection {
   heading: string
   content: string
+  subsections?: { heading: string; content: string }[]
 }
 
 interface GeneratedDocContent {
+  title: string
+  abstract?: string
   sections: DocumentSection[]
 }
 
 /**
- * Generate document content using OpenRouter's Gemini 2.0
+ * Generate document content using OpenRouter's Gemini 2.0 Flash
  */
-async function generateDocumentContent(prompt: string, existingSections: string[]): Promise<GeneratedDocContent> {
+async function generateDocumentContent(
+  prompt: string, 
+  existingSections: string[],
+  documentType: string
+): Promise<GeneratedDocContent> {
   const apiKey = process.env.OPENROUTER_API_KEY?.replace(/\s/g, "")
 
   if (!apiKey) {
@@ -23,8 +30,18 @@ async function generateDocumentContent(prompt: string, existingSections: string[
 
   const sectionsContext =
     existingSections.length > 0
-      ? `The document has these existing sections: ${existingSections.join(", ")}`
-      : "Create appropriate sections for the document"
+      ? `Match these existing sections exactly: ${existingSections.join(", ")}`
+      : "Create appropriate professional sections"
+
+  const documentTypePrompts: Record<string, string> = {
+    report: "Create a professional business report with executive summary, findings, analysis, and recommendations.",
+    proposal: "Create a compelling project proposal with objectives, methodology, timeline, budget, and expected outcomes.",
+    article: "Create an engaging article with introduction, main body with clear arguments, and conclusion.",
+    research: "Create a research document with abstract, introduction, literature review, methodology, results, discussion, and conclusion.",
+    default: "Create a well-structured professional document with clear sections and detailed content."
+  }
+
+  const typeGuidance = documentTypePrompts[documentType] || documentTypePrompts.default
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -32,40 +49,58 @@ async function generateDocumentContent(prompt: string, existingSections: string[
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-      "X-Title": "DocuGen AI",
+      "X-Title": "DocuGen AI Word Generator",
     },
     body: JSON.stringify({
       model: "google/gemini-2.0-flash-001",
       messages: [
         {
           role: "system",
-          content: `You are an expert document writer. Generate professional content for documents.
+          content: `You are an expert document writer and content strategist. ${typeGuidance}
+
 ${sectionsContext}
 
-Return ONLY valid JSON with this structure:
+Generate comprehensive, professional content that:
+1. Uses clear, engaging headings that capture the main idea
+2. Provides detailed, well-researched content for each section (200-400 words per section)
+3. Includes specific examples, data points, and actionable insights
+4. Maintains professional tone throughout
+5. Uses proper transitions between sections
+6. Includes subsections where appropriate for complex topics
+
+Return ONLY valid JSON (no markdown, no code blocks) with this exact structure:
 {
+  "title": "Document Title",
+  "abstract": "Brief summary of the document (2-3 sentences)",
   "sections": [
     {
       "heading": "Section Heading",
-      "content": "Detailed content for this section..."
+      "content": "Detailed professional content for this section with multiple paragraphs...",
+      "subsections": [
+        {
+          "heading": "Subsection Heading",
+          "content": "Subsection content..."
+        }
+      ]
     }
   ]
 }
 
-Keep content professional, well-structured, and relevant to the topic.`,
+Make content substantive, informative, and professionally written.`,
         },
         {
           role: "user",
-          content: prompt,
+          content: `Create a professional document about: ${prompt}`,
         },
       ],
       temperature: 0.7,
-      max_tokens: 4000,
+      max_tokens: 6000,
     }),
   })
 
   if (!response.ok) {
     const error = await response.text()
+    console.error("[v0] OpenRouter API error:", response.status, error)
     throw new Error(`AI API failed: ${response.status} - ${error}`)
   }
 
@@ -83,7 +118,14 @@ Keep content professional, well-structured, and relevant to the topic.`,
     jsonContent = jsonContent.replace(/```\n?/g, "")
   }
 
-  return JSON.parse(jsonContent)
+  try {
+    const parsed = JSON.parse(jsonContent)
+    console.log(`[v0] Generated document with ${parsed.sections?.length || 0} sections`)
+    return parsed
+  } catch (error) {
+    console.error("[v0] Failed to parse AI response:", jsonContent.substring(0, 500))
+    throw new Error("Failed to parse AI-generated content")
+  }
 }
 
 /**
@@ -120,6 +162,23 @@ function extractDocxSections(xmlString: string): string[] {
 }
 
 /**
+ * Create XML for a new paragraph with text
+ */
+function createParagraphXml(text: string, style?: string): string {
+  const styleXml = style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ""
+  return `<w:p>${styleXml}<w:r><w:t>${escapeXml(text)}</w:t></w:r></w:p>`
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+}
+
+/**
  * Replace text content in DOCX while preserving formatting
  */
 function replaceDocxContent(xmlString: string, generatedContent: GeneratedDocContent): string {
@@ -131,6 +190,7 @@ function replaceDocxContent(xmlString: string, generatedContent: GeneratedDocCon
   let currentSectionIndex = 0
   let isInSection = false
   let contentPlaced = false
+  let titlePlaced = false
 
   for (let i = 0; i < paragraphs.length; i++) {
     const para = paragraphs[i]
@@ -140,8 +200,20 @@ function replaceDocxContent(xmlString: string, generatedContent: GeneratedDocCon
     if (pStyle) {
       const styleVal = pStyle.getAttribute("w:val")
 
+      // Check if this is the document title
+      if (styleVal && styleVal.includes("Title") && !titlePlaced) {
+        if (textElements.length > 0) {
+          textElements[0].textContent = generatedContent.title || "Generated Document"
+          for (let j = 1; j < textElements.length; j++) {
+            textElements[j].textContent = ""
+          }
+          titlePlaced = true
+        }
+        continue
+      }
+
       // Check if this is a heading
-      if (styleVal && (styleVal.includes("Heading") || styleVal.includes("Title"))) {
+      if (styleVal && styleVal.includes("Heading")) {
         // Replace heading text if we have a matching section
         if (currentSectionIndex < generatedContent.sections.length) {
           const section = generatedContent.sections[currentSectionIndex]
@@ -160,7 +232,9 @@ function replaceDocxContent(xmlString: string, generatedContent: GeneratedDocCon
         if (currentSectionIndex < generatedContent.sections.length) {
           const section = generatedContent.sections[currentSectionIndex]
           if (textElements.length > 0) {
-            textElements[0].textContent = section.content
+            // Split content into paragraphs for better formatting
+            const paragraphContent = section.content.split('\n\n')[0] || section.content
+            textElements[0].textContent = paragraphContent
             // Clear other text elements
             for (let j = 1; j < textElements.length; j++) {
               textElements[j].textContent = ""
@@ -175,7 +249,8 @@ function replaceDocxContent(xmlString: string, generatedContent: GeneratedDocCon
       // Regular paragraph in a section
       if (currentSectionIndex < generatedContent.sections.length) {
         const section = generatedContent.sections[currentSectionIndex]
-        textElements[0].textContent = section.content
+        const paragraphContent = section.content.split('\n\n')[0] || section.content
+        textElements[0].textContent = paragraphContent
         for (let j = 1; j < textElements.length; j++) {
           textElements[j].textContent = ""
         }
@@ -194,6 +269,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get("file") as File
     const prompt = formData.get("prompt") as string
+    const documentType = (formData.get("documentType") as string) || "default"
 
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 })
@@ -204,6 +280,8 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[v0] Processing Word document:", file.name)
+    console.log("[v0] Document type:", documentType)
+    console.log("[v0] Prompt:", prompt.substring(0, 100))
 
     // Read the DOCX file
     const arrayBuffer = await file.arrayBuffer()
@@ -216,15 +294,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid DOCX file" }, { status: 400 })
     }
 
-    // Extract existing sections
+    // Extract existing sections from template
     const existingSections = extractDocxSections(documentXml)
     console.log("[v0] Found existing sections:", existingSections)
 
-    // Generate new content
-    const generatedContent = await generateDocumentContent(prompt, existingSections)
-    console.log("[v0] Generated", generatedContent.sections.length, "sections")
+    // Generate new content with AI
+    console.log("[v0] Generating content with Gemini 2.0 Flash...")
+    const generatedContent = await generateDocumentContent(prompt, existingSections, documentType)
+    console.log("[v0] Generated content:")
+    console.log("[v0]   - Title:", generatedContent.title)
+    console.log("[v0]   - Sections:", generatedContent.sections.length)
 
-    // Replace content in the document
+    // Replace content in the document while preserving template formatting
+    console.log("[v0] Replacing template content...")
     const modifiedXml = replaceDocxContent(documentXml, generatedContent)
     zip.file("word/document.xml", modifiedXml)
 
@@ -234,10 +316,12 @@ export async function POST(request: NextRequest) {
       compression: "DEFLATE",
     })
 
+    console.log("[v0] Successfully generated document, size:", outputBuffer.length)
+
     return new NextResponse(outputBuffer, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="ai-generated-document.docx"`,
+        "Content-Disposition": `attachment; filename="ai-generated-${file.name}"`,
       },
     })
   } catch (error) {
