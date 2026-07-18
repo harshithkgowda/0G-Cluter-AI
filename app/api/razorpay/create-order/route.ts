@@ -3,8 +3,19 @@ import { NextRequest, NextResponse } from "next/server"
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET
 
+interface CreditPackage {
+  id: string
+  name: string
+  credits: number
+  price: number
+  description: string
+  popular?: boolean
+  subscription?: boolean
+  durationDays?: number
+}
+
 // Credit packages
-export const CREDIT_PACKAGES = {
+export const CREDIT_PACKAGES: Record<string, CreditPackage> = {
   starter: {
     id: "starter",
     name: "Starter Pack",

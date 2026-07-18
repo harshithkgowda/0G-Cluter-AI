@@ -4,7 +4,7 @@ export interface SlideContent {
   slideNumber: number
   title: string
   content: string[]
-  imageQuery: string
+  imageQuery?: string
 }
 
 export interface ImageData {

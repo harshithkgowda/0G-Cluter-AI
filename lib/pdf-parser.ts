@@ -29,7 +29,9 @@ const DEFAULT_SECTIONS: PaperSection[] = [
 export async function parsePDF(buffer: Buffer): Promise<ParsedPaper> {
   try {
     // Try to dynamically import pdf-parse
-    const pdfParse = await import("pdf-parse").then((m) => m.default || m)
+    const pdfParseModule = await import("pdf-parse")
+    // pdf-parse v2 exports the function directly in ESM; fall back to .default for CJS interop
+    const pdfParse = (pdfParseModule as unknown as (buf: Buffer) => Promise<{ text: string }>)
     const data = await pdfParse(buffer)
     const text = data.text
 

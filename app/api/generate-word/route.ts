@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
       compression: "DEFLATE",
     })
 
-    return new NextResponse(outputBuffer, {
+    return new NextResponse(outputBuffer as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "Content-Disposition": `attachment; filename="ai-generated-document.docx"`,

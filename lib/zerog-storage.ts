@@ -37,7 +37,6 @@ function generateFileId(data: Uint8Array): string {
 
 // Store metadata about uploaded files
 const uploadedFiles = new Map<string, {
-  rootHash: string;
   size: number;
   timestamp: number;
   name: string;
@@ -122,7 +121,6 @@ export class ZeroGStorage {
       if (uploadResult.success && uploadResult.rootHash) {
         // Store metadata locally
         uploadedFiles.set(uploadResult.rootHash, {
-          rootHash: uploadResult.rootHash,
           size: fileData.length,
           timestamp: Date.now(),
           name: fileName,
@@ -170,10 +168,10 @@ export class ZeroGStorage {
       
       return {
         success: true,
-        rootHash: rootHash,
+        rootHash,
         txHash: signature.slice(0, 66), // Use part of signature as mock tx hash
         fileSize: fileData.length,
-        timestamp: timestamp,
+        timestamp,
       };
     } catch (error) {
       console.error('[v0] Indexer upload error:', error);

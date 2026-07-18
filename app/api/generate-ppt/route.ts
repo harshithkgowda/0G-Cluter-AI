@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Successfully generated presentation")
 
     // Return the modified PPTX file
-    return new NextResponse(modifiedPptx, {
+    return new NextResponse(modifiedPptx as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "Content-Disposition": `attachment; filename="ai-generated-${file.name}"`,
