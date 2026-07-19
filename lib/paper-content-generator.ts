@@ -36,7 +36,7 @@ export async function generatePaperContent(
   }
 
   console.log("[v0] Starting paper content generation...")
-  console.log("[v0] Using model: google/gemini-2.0-flash-001")
+  console.log("[v0] Using model: google/gemini-2.5-flash")
 
   const systemPrompt = `You are an expert academic writer specializing in IEEE conference papers. Generate high-quality, professional academic content that matches the exact structure of the provided template.
 
@@ -107,7 +107,7 @@ Generate substantial, detailed academic content for each section. Make it sound 
       method: "POST",
       headers,
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },

@@ -52,7 +52,7 @@ async function generateDocumentContent(
       "X-Title": "DocuGen AI Word Generator",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.0-flash-001",
+      model: "google/gemini-2.5-flash",
       messages: [
         {
           role: "system",
@@ -299,7 +299,7 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Found existing sections:", existingSections)
 
     // Generate new content with AI
-    console.log("[v0] Generating content with Gemini 2.0 Flash...")
+    console.log("[v0] Generating content with Gemini 2.5 Flash...")
     const generatedContent = await generateDocumentContent(prompt, existingSections, documentType)
     console.log("[v0] Generated content:")
     console.log("[v0]   - Title:", generatedContent.title)
